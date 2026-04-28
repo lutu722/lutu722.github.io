@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设备实时监控</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        body {
+            background: #f5f7fa;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        .title {
+            font-size: 22px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .threshold-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .threshold-item {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .threshold-label {
+            font-size: 16px;
+            margin-bottom: 4px;
+        }
+
+        .threshold-value {
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        input {
+            flex: 1;
+            height: 44px;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 0 12px;
+            font-size: 16px;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        button {
+            flex: 1;
+            height: 48px;
+            border: none;
+            border-radius: 10px;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        .btn-save {
+            background: #2ecc71;
+        }
+
+        .btn-refresh {
+            background: #3498db;
+        }
+
+        .table-header {
+            display: flex;
+            background: #3498db;
+            color: white;
+            padding: 12px 0;
+            border-radius: 8px 8px 0 0;
+            font-weight: bold;
+        }
+
+        .table-row {
+            display: flex;
+            background: white;
+            padding: 14px 0;
+            border-bottom: 1px solid #eee;
+            align-items: center;
+        }
+
+        .table-row.warn {
+            background: #ffeaea;
+        }
+
+        .cell {
+            flex: 1;
+            text-align: center;
+            font-size: 16px;
+        }
+
+        .cell.dev-name {
+            flex: 3;
+            text-align: left;
+            padding-left: 10px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .cell.status {
+            flex: 1;
+        }
+
+        .device-list {
+            max-height: 65vh;
+            overflow-y: auto;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .warn-banner {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: #e74c3c;
+            color: white;
+            text-align: center;
+            padding: 12px 0;
+            font-size: 16px;
+        }
+
+        /* 设备别名输入框 */
+        .alias-input {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 6px 8px;
+            font-size: 15px;
+            width: 120px;
+        }
+
+        /* 平台设备名只读样式 */
+        .platform-name {
+            color: #666;
+            font-size: 14px;
+            user-select: none;
+        }
+
+        /* 按钮居中 */
+        .btn-center {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <!-- 全局阈值显示 -->
+        <div class="card">
+            <div class="title">全局统一阈值设置</div>
+            <div class="threshold-grid">
+                <div class="threshold-item">
+                    <div class="threshold-label">温度上限</div>
+                    <div class="threshold-value" id="globalUpper1">100</div>
+                </div>
+                <div class="threshold-item">
+                    <div class="threshold-label">温度下限</div>
+                    <div class="threshold-value" id="globalLower1">-50</div>
+                </div>
+                <div class="threshold-item">
+                    <div class="threshold-label">转数上限</div>
+                    <div class="threshold-value" id="globalUpper2">10000000000</div>
+                </div>
+                <div class="threshold-item">
+                    <div class="threshold-label">转数下限</div>
+                    <div class="threshold-value" id="globalLower2">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设置阈值 -->
+        <div class="card">
+            <div class="title">设置全局阈值</div>
+            <div class="form-row">
+                <input id="u1" type="number" placeholder="温度上限">
+                <input id="l1" type="number" placeholder="温度下限">
+            </div>
+            <div class="form-row">
+                <input id="u2" type="number" placeholder="转数上限">
+                <input id="l2" type="number" placeholder="转数下限">
+            </div>
+            <!-- 按钮居中 -->
+            <div class="btn-center">
+                <button class="btn-save" onclick="saveGlobalThreshold()">保存全局阈值</button>
+            </div>
+        </div>
+
+        <!-- 按钮 -->
+        <div class="btn-row">
+            <button class="btn-refresh" onclick="refreshAll()">一键刷新全部</button>
+        </div>
+
+        <!-- 表头 -->
+        <div class="table-header">
+            <div class="cell dev-name">设备名称</div>
+            <div class="cell">温度</div>
+            <div class="cell">转数</div>
+            <div class="cell">秒</div>
+            <div class="cell">分钟</div>
+            <div class="cell">小时</div>
+            <div class="cell status">在线状态</div>
+            <div class="cell status">报警状态</div>
+        </div>
+
+        <!-- 设备列表 -->
+        <div class="device-list" id="deviceListBody"></div>
+
+        <!-- 报警提示 -->
+        <div class="warn-banner" id="warnBanner" style="display:none;">
+            ⚠️ 当前存在设备参数超出全局阈值
+        </div>
+    </div>
+
+    <script>
+        // ================= 全局阈值 =================
+        let globalUpper1 = 100
+        let globalLower1 = -50
+        let globalUpper2 = 10000000000
+        let globalLower2 = 0
+
+        // ================= 设备列表 =================
+        let deviceList = [
+                        { deviceName: "SP53", alias: "设备1", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP53&et=1871892225&method=md5&sign=IvmGxVo8IaHT%2FmiuwlFe4g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP42", alias: "设备2", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP42&et=1871899622&method=md5&sign=Tu%2BCa09ieskkZwjtgY%2Fvgw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP32", alias: "设备3", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP32&et=1871899784&method=md5&sign=G2SKfTmWVV%2BGyMJTo8%2F%2BwQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP84", alias: "设备4", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP84&et=1871899841&method=md5&sign=qe0ZJjWulgj1v3ypFg3rnQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP36", alias: "设备5", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP36&et=1871901559&method=md5&sign=KUeHMWIa0wXeNaf3PYN5Xg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP157", alias: "设备6", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP157&et=1871895394&method=md5&sign=gZQCAM8Iw%2BUv5vmjqVrj6A%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP101", alias: "设备7", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP101&et=1871901716&method=md5&sign=kaAUGNjEGe63oemtRzlETA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP102", alias: "设备8", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP102&et=1871901756&method=md5&sign=71NcoHJVc2EfUhj5%2Bbyucg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP103", alias: "设备9", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP103&et=1871901780&method=md5&sign=LB4Ek4KmCu3dYAX9yByVFw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP104", alias: "设备10", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP104&et=1871901808&method=md5&sign=lAJbN4MQsmu3rrw4PZnO0A%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP105", alias: "设备11", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP105&et=1871901837&method=md5&sign=phEXYy52GJP6kxYH0o1YYQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP106", alias: "设备12", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP106&et=1871901863&method=md5&sign=wyba4NmtX70Dvh%2FziidLyw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP107", alias: "设备13", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP107&et=1871901890&method=md5&sign=FHwC2ipvc5nP%2Fj7XLN%2F89Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP108", alias: "设备14", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP108&et=1871901912&method=md5&sign=p58qKDjqbBfW5JxxOjq9Dw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP109", alias: "设备15", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP109&et=1871901955&method=md5&sign=GaGkxv1la2zh1M3IPTumyw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP110", alias: "设备16", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP110&et=1871902130&method=md5&sign=GlzFnZQo%2Fn05PbUZPgJZyQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP111", alias: "设备17", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP111&et=1871902154&method=md5&sign=aWMySesvIpDfZmrAIdLT0g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP112", alias: "设备18", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP112&et=1871902178&method=md5&sign=8moPtpSkg7R0%2B2KeYlSTrQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP113", alias: "设备19", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP113&et=1871902207&method=md5&sign=mU9u41yHwBFEMX2wST0r2w%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP114", alias: "设备20", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP114&et=1871902245&method=md5&sign=%2F4foCVRgCtkT3%2F7d9K%2BV0w%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP115", alias: "设备21", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP115&et=1871902277&method=md5&sign=%2FDEyyq%2FFfNKwCerYRvy5zw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP116", alias: "设备22", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP116&et=1871902306&method=md5&sign=KbFHKYiIjGgBTZke4bVVRQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP117", alias: "设备23", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP117&et=1871902340&method=md5&sign=%2FX1TrTroEPu5yEX3k%2BR7Jg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP118", alias: "设备24", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP118&et=1871902370&method=md5&sign=f3AQEYskdUiuFku3vcoNCg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP119", alias: "设备25", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP119&et=1871902398&method=md5&sign=jmb7TpkSCStO%2Bv2sPhebkA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP120", alias: "设备26", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP120&et=1871902422&method=md5&sign=OOmKYUKhwHo1etoDWKrr7g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP121", alias: "设备27", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP121&et=1871902448&method=md5&sign=svkETTHi8H72w22fiTOcFw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP122", alias: "设备28", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP122&et=1871902480&method=md5&sign=6bYOSOOf7Cf0pOYCqpMFnA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP123", alias: "设备29", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP123&et=1871902503&method=md5&sign=9PsoA5%2F7GzUYB9Y7s295FQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP124", alias: "设备30", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP124&et=1871902531&method=md5&sign=eZLBAgj8%2BeWd%2Fj57Whaw4Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP125", alias: "设备31", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP125&et=1871902557&method=md5&sign=gH%2FzVTQhXiWuNcmf9C3p7w%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP126", alias: "设备32", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP126&et=1871902585&method=md5&sign=HsiOpYfB%2B1WUYThDGuVn%2FA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP127", alias: "设备33", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP127&et=1871902605&method=md5&sign=ebar8fZscZvbCiqAEe9zxg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP128", alias: "设备34", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP128&et=1871902634&method=md5&sign=LFtiRYOFz7fwNs59SqwqMw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP129", alias: "设备35", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP129&et=1871902669&method=md5&sign=0XxDLaBVKFE2Cc0nBYtiwg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP130", alias: "设备36", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP130&et=1871902704&method=md5&sign=BZ7po2wtnE%2BYtvIA9MMl%2Fw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP131", alias: "设备37", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP131&et=1871902727&method=md5&sign=cFXLkHYPviIIhsvGC2JMKA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP132", alias: "设备38", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP132&et=1871902751&method=md5&sign=sW74xWxzXilUwX5Ft77k4Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP133", alias: "设备39", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP133&et=1871902784&method=md5&sign=N9IC75dKqCGRxDqbbeoTWQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP134", alias: "设备40", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP134&et=1871902816&method=md5&sign=2NIlbSl6BBsUkEQVJT56uQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP135", alias: "设备41", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP135&et=1871902845&method=md5&sign=juNSDClidSn2zli%2BeHeu8Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP136", alias: "设备42", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP136&et=1871903792&method=md5&sign=NuP3avgDTLmn2BWV1186%2BA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP137", alias: "设备43", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP137&et=1871903817&method=md5&sign=uQrXMbUlLwAOiEamWOPIJQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP138", alias: "设备44", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP138&et=1871903847&method=md5&sign=6dCaUOBrOR2gs8vxwOSGxQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP139", alias: "设备45", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP139&et=1871903867&method=md5&sign=eCJxukj5b%2FmdGsogp6DLBg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP140", alias: "设备46", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP140&et=1871903902&method=md5&sign=0OvSTkHJyQRW49%2FjZB9Gtw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP141", alias: "设备47", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP141&et=1871903927&method=md5&sign=8EOMSOdcbv%2BnuijLMHmazA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP142", alias: "设备48", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP142&et=1871903957&method=md5&sign=CWiXAqhrYKg1val4B3jKIg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP143", alias: "设备49", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP143&et=1871903993&method=md5&sign=6%2FOJxKduJZ50f32tbISPdg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP144", alias: "设备50", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP144&et=1871904020&method=md5&sign=bk7o0KuJUYJRKKOnNCAvhg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP145", alias: "设备51", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP145&et=1871904050&method=md5&sign=dLciCFN7bT3sQa%2FRK5YVhQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP146", alias: "设备52", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP146&et=1871904119&method=md5&sign=8hF0Iogod71y%2BOirn928pA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP147", alias: "设备53", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP147&et=1871904140&method=md5&sign=KucKoMBcxKCD9Ok6%2Fls%2FNw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP148", alias: "设备54", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP148&et=1871904168&method=md5&sign=wP05fdDPwvrRvBjOvtXMzw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP149", alias: "设备55", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP149&et=1871904193&method=md5&sign=lBzD0pFmM3wCQrk0ZOf41w%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP150", alias: "设备56", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP150&et=1871904214&method=md5&sign=nqUBYcOOnkuoPdrOp2M23A%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP151", alias: "设备57", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP151&et=1871904240&method=md5&sign=HymVG3tvDihadrob6WPZMg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP152", alias: "设备58", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP152&et=1871904263&method=md5&sign=xTdiK%2FUQKI7N4i0UBNZwXw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP153", alias: "设备59", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP153&et=1871904286&method=md5&sign=2p%2FlxJrzaT8p%2BAWr2EIBuw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP154", alias: "设备60", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP154&et=1871904326&method=md5&sign=jqB8n%2BqJmc7lbpvquj%2BnFw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP155", alias: "设备61", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP155&et=1871904352&method=md5&sign=AJmZJkNhk9LJFAsVZFqoPA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP156", alias: "设备62", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP156&et=1871904383&method=md5&sign=jSi7kKQmnrOfElOsy02l1Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP158", alias: "设备63", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP158&et=1871904433&method=md5&sign=4VDiIWw56pVViO1CRa9%2F%2Fw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP159", alias: "设备64", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP159&et=1871904457&method=md5&sign=5GNh8ykdZZhq3Oy3eo4oYQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP160", alias: "设备65", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP160&et=1871904493&method=md5&sign=wYP9tMYc8XULO6R6hV4nFg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP161", alias: "设备66", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP161&et=1871904523&method=md5&sign=oVPaxC8gNZzmxudnUvTdXQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP162", alias: "设备67", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP162&et=1871904551&method=md5&sign=0W5dHMY%2Bi4AiZD3s6wonzw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP163", alias: "设备68", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP163&et=1871904577&method=md5&sign=nxgS3ievUkxXtMRL35HGBQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP164", alias: "设备69", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP164&et=1871904605&method=md5&sign=1h%2BecRImhdf6fhw9wuBaFQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP165", alias: "设备70", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP165&et=1871904631&method=md5&sign=Z%2Bcqp%2Fkg9nA9CuCT175%2BHQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP166", alias: "设备71", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP166&et=1871904667&method=md5&sign=s%2FNAw96%2B7Jm7l0ASdy8ZXg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP167", alias: "设备72", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP167&et=1871904691&method=md5&sign=%2BcURMLZFRhj1udGlwKollA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP168", alias: "设备73", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP168&et=1871904716&method=md5&sign=Zd1klNnc%2FUF%2BXvqCpfG%2FVw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP169", alias: "设备74", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP169&et=1871904750&method=md5&sign=Nv9wy36oe%2FWJAjq07AH4FQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP170", alias: "设备75", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP170&et=1871904774&method=md5&sign=6YxvVrp2tN0cq3HAEbgf%2Fg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP171", alias: "设备76", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP171&et=1871904798&method=md5&sign=TZRrGN%2BLSEY0mGJA2tOrxQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP172", alias: "设备77", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP172&et=1871904825&method=md5&sign=l%2Fv8QPGpKT0osTBwcfJFUw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP173", alias: "设备78", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP173&et=1871904859&method=md5&sign=DtIEf6nL1RWBV6h9xdYsCQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP174", alias: "设备79", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP174&et=1871904888&method=md5&sign=RjOrb7wwow%2FWgIm%2BC%2BNclA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP175", alias: "设备80", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP175&et=1871904912&method=md5&sign=b047vvF24bKtcL5UWIrN7A%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP176", alias: "设备81", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP176&et=1871904932&method=md5&sign=AUbwoE8aADs692YK1LEGzA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP177", alias: "设备82", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP177&et=1871904963&method=md5&sign=jCf4%2F6iy5STHWqa3Kh9U9g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP178", alias: "设备83", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP178&et=1871904994&method=md5&sign=%2Fh2ah7h7d7yW3KH46rd0Mg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP179", alias: "设备84", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP179&et=1871905021&method=md5&sign=gtOwvp3rTYNdfQAme41B1g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP180", alias: "设备85", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP180&et=1871905045&method=md5&sign=xBjM%2BvnEaFMsDG2WG%2FGuzw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP181", alias: "设备86", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP181&et=1871905066&method=md5&sign=smKlZLYXErJ0I7uXorqkBw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP182", alias: "设备87", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP182&et=1871905109&method=md5&sign=PAQnD2%2FNy%2BCRXfGmMVp9vA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP183", alias: "设备88", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP183&et=1871905133&method=md5&sign=qVZekZWTN6cePwic%2FfqrUw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP184", alias: "设备89", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP184&et=1871905160&method=md5&sign=BF%2FOmWtGduB0Iqi2DJXhJA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP185", alias: "设备90", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP185&et=1871905180&method=md5&sign=sM9jP2oW6Pfdgwa0qsEXjw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP186", alias: "设备91", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP186&et=1871905202&method=md5&sign=vI2TIZ4MO0B4vpFTyh8K4w%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP187", alias: "设备92", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP187&et=1871905238&method=md5&sign=Zwgn0S58BIgnv8hUIT%2BpRA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP188", alias: "设备93", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP188&et=1871905268&method=md5&sign=zf%2Bs88MTfLbsjPJYvvcwmw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP189", alias: "设备94", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP189&et=1871905309&method=md5&sign=v0EdJTmmhTp%2BpyD%2F3VjIQA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP190", alias: "设备95", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP190&et=1871905328&method=md5&sign=%2F9Nb9LHSlrmHrPP94hJ66w%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP191", alias: "设备96", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP191&et=1871905357&method=md5&sign=%2FjScwLtPKRbChNzViQFf0A%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP192", alias: "设备97", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP192&et=1871905379&method=md5&sign=hK02twNOBsoA4eSGA09EjQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP193", alias: "设备98", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP193&et=1871905401&method=md5&sign=4BsrzGEw3zMHntOkNt%2FIzQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP194", alias: "设备99", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP194&et=1871905430&method=md5&sign=BynhrfvZhTX%2FhRZK0yX0kw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP195", alias: "设备100", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP195&et=1871905449&method=md5&sign=ZqbAUmy6xNguIp%2BtR%2FDt1g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP196", alias: "设备101", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP196&et=1871905490&method=md5&sign=k7K883FjGz2YFLd17vYt5g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP197", alias: "设备102", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP197&et=1871905513&method=md5&sign=c4uW9CFqKo%2BdzwqtoJQ7Cw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP198", alias: "设备103", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP198&et=1871905539&method=md5&sign=n7uSm5vAI6SmBeBACouSZg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP199", alias: "设备104", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP199&et=1871905556&method=md5&sign=uFMV8V%2BqkkcTINrV5tAtjQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
+                        { deviceName: "SP200", alias: "设备105", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP200&et=1871905580&method=md5&sign=Y4XwD8QOGtkE3BTDunzz1Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false }
+        ]
+
+        // ================= 配置 =================
+        const apiKey = "2TevJ1M7sUvvJWXvG+vz3e21/+cl8f+DBZdTG70zybs="
+        let isRefreshing = false
+
+        // ================= 初始化 =================
+        window.onload = function () {
+            renderDeviceList()
+            refreshThresholdUI()
+            startAutoPoll()
+        }
+
+        // ================= 自动刷新 =================
+        function startAutoPoll() {
+            fetchAllDevice()
+            setInterval(fetchAllDevice, 5000)
+        }
+
+        // ================= 获取所有设备 =================
+        async function fetchAllDevice() {
+            if (isRefreshing) return
+            isRefreshing = true
+            for (let i = 0; i < deviceList.length; i++) {
+                await getOneDeviceData(deviceList[i], i)
+            }
+            isRefreshing = false
+            renderDeviceList()
+            checkWarnBanner()
+        }
+
+        // ================= 获取单个设备 =================
+        function getOneDeviceData(dev, idx) {
+            return new Promise(resolve => {
+                // 在线状态
+                fetch(`https://api.heclouds.com/devices/${dev.deviceName}/status`, {
+                    headers: { "api-key": apiKey }
+                }).then(res => res.json()).then(res => {
+                    if (res.data) deviceList[idx].online = res.data.online
+                }).catch(() => {
+                    deviceList[idx].online = false
+                })
+
+                // 数据
+                fetch(`https://iot-api.heclouds.com/thingmodel/query-device-property?product_id=${dev.productId}&device_name=${dev.deviceName}`, {
+                    headers: { "authorization": dev.token }
+                }).then(res => res.json()).then(res => {
+                    if (res.data) {
+                        const f = (key) => {
+                            const t = res.data.find(x => x.identifier === key)
+                            return t ? Number(t.value) : 0
+                        }
+                        deviceList[idx].ADC1 = f("ADC1")
+                        deviceList[idx].ADC2 = f("ADC2")
+                        deviceList[idx].ADC3 = f("ADC3")
+                        deviceList[idx].ADC4 = f("ADC4")
+                        deviceList[idx].ADC5 = f("ADC5")
+                        deviceList[idx].isWarn = checkWarn(deviceList[idx])
+                    }
+                    resolve()
+                }).catch(() => resolve())
+            })
+        }
+
+        // ================= 报警判断 =================
+        function checkWarn(d) {
+            return (
+                d.ADC1 > globalUpper1 || d.ADC1 < globalLower1 ||
+                d.ADC2 > globalUpper2 || d.ADC2 < globalLower2
+            )
+        }
+
+        // ================= 保存全局阈值 =================
+        function saveGlobalThreshold() {
+            const u1 = document.getElementById('u1').value
+            const l1 = document.getElementById('l1').value
+            const u2 = document.getElementById('u2').value
+            const l2 = document.getElementById('l2').value
+
+            if (u1) globalUpper1 = Number(u1)
+            if (l1) globalLower1 = Number(l1)
+            if (u2) globalUpper2 = Number(u2)
+            if (l2) globalLower2 = Number(l2)
+
+            document.getElementById('u1').value = ''
+            document.getElementById('l1').value = ''
+            document.getElementById('u2').value = ''
+            document.getElementById('l2').value = ''
+
+            refreshThresholdUI()
+            alert('全局阈值已保存')
+        }
+
+        // ================= 刷新阈值显示 =================
+        function refreshThresholdUI() {
+            document.getElementById('globalUpper1').innerText = globalUpper1
+            document.getElementById('globalLower1').innerText = globalLower1
+            document.getElementById('globalUpper2').innerText = globalUpper2
+            document.getElementById('globalLower2').innerText = globalLower2
+        }
+
+        // 更新设备别名
+        function updateAlias(index, value) {
+            deviceList[index].alias = value
+        }
+
+        // ================= 渲染设备列表 =================
+        function renderDeviceList() {
+            const body = document.getElementById('deviceListBody')
+            let html = ''
+            deviceList.forEach((item, idx) => {
+                const warnClass = item.isWarn ? 'warn' : ''
+                const onlineText = item.online ? '在线' : '离线'
+                const onlineColor = item.online ? '#2ecc71' : '#999'
+                const warnText = item.isWarn ? '超限' : '正常'
+                const warnColor = item.isWarn ? '#e74c3c' : ''
+
+                html += `
+                <div class="table-row ${warnClass}">
+                    <div class="cell dev-name">
+                        <input class="alias-input" value="${item.alias}" oninput="updateAlias(${idx}, this.value)" />
+                        <span class="platform-name">(${item.deviceName})</span>
+                    </div>
+                    <div class="cell">${item.ADC1}</div>
+                    <div class="cell">${item.ADC2}</div>
+                    <div class="cell">${item.ADC3}</div>
+                    <div class="cell">${item.ADC4}</div>
+                    <div class="cell">${item.ADC5}</div>
+                    <div class="cell status" style="color:${onlineColor}">${onlineText}</div>
+                    <div class="cell status" style="color:${warnColor}">${warnText}</div>
+                </div>`
+            })
+            body.innerHTML = html
+        }
+
+        // ================= 报警条 =================
+        function checkWarnBanner() {
+            const hasWarn = deviceList.some(d => d.isWarn)
+            document.getElementById('warnBanner').style.display = hasWarn ? 'block' : 'none'
+        }
+
+        // ================= 手动刷新 =================
+        function refreshAll() {
+            fetchAllDevice()
+            alert('刷新中...')
+        }
+    </script>
+</body>
+</html>
