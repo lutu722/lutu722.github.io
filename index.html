@@ -89,6 +89,11 @@
             color: white;
             font-size: 16px;
             cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
+            opacity: 0.9;
         }
 
         .btn-save {
@@ -99,6 +104,7 @@
             background: #3498db;
         }
 
+        /* 表格样式修复 */
         .table-header {
             display: flex;
             background: #3498db;
@@ -117,13 +123,14 @@
         }
 
         .table-row.warn {
-            background: #ffeaea;
+            background: #fff1f0;
         }
 
         .cell {
             flex: 1;
             text-align: center;
-            font-size: 16px;
+            font-size: 15px;
+            padding: 0 4px;
         }
 
         .cell.dev-name {
@@ -140,9 +147,20 @@
         }
 
         .device-list {
-            max-height: 65vh;
+            max-height: 62vh;
             overflow-y: auto;
             border-radius: 0 0 8px 8px;
+            border: 1px solid #eee;
+            background: #fff;
+        }
+
+        /* 滚动条优化 */
+        .device-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        .device-list::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
         }
 
         .warn-banner {
@@ -155,6 +173,7 @@
             text-align: center;
             padding: 12px 0;
             font-size: 16px;
+            font-weight: bold;
         }
 
         /* 设备别名输入框 */
@@ -179,11 +198,23 @@
             justify-content: center;
             margin-top: 10px;
         }
+
+        /* 加载提示 */
+        .loading-tip {
+            text-align: center;
+            padding: 10px;
+            color: #666;
+            font-size: 14px;
+            display: none;
+        }
     </style>
 </head>
 
 <body>
     <div class="container">
+        <!-- 加载提示 -->
+        <div class="loading-tip" id="loadingTip">🔄 设备数据刷新中...</div>
+
         <!-- 全局阈值显示 -->
         <div class="card">
             <div class="title">全局统一阈值设置</div>
@@ -218,7 +249,6 @@
                 <input id="u2" type="number" placeholder="转数上限">
                 <input id="l2" type="number" placeholder="转数下限">
             </div>
-            <!-- 按钮居中 -->
             <div class="btn-center">
                 <button class="btn-save" onclick="saveGlobalThreshold()">保存全局阈值</button>
             </div>
@@ -383,14 +413,23 @@
             setInterval(fetchAllDevice, 5000)
         }
 
+        // 显示/隐藏加载
+        function setLoading(show) {
+            document.getElementById('loadingTip').style.display = show ? 'block' : 'none'
+        }
+
         // ================= 获取所有设备 =================
         async function fetchAllDevice() {
             if (isRefreshing) return
             isRefreshing = true
+            setLoading(true)
+            
             for (let i = 0; i < deviceList.length; i++) {
                 await getOneDeviceData(deviceList[i], i)
             }
+            
             isRefreshing = false
+            setLoading(false)
             renderDeviceList()
             checkWarnBanner()
         }
@@ -414,7 +453,7 @@
                     if (res.data) {
                         const f = (key) => {
                             const t = res.data.find(x => x.identifier === key)
-                            return t ? Number(t.value) : 0
+                            return t ? Number(t.value) || 0 : 0
                         }
                         deviceList[idx].ADC1 = f("ADC1")
                         deviceList[idx].ADC2 = f("ADC2")
@@ -430,31 +469,37 @@
 
         // ================= 报警判断 =================
         function checkWarn(d) {
-            return (
-                d.ADC1 > globalUpper1 || d.ADC1 < globalLower1 ||
-                d.ADC2 > globalUpper2 || d.ADC2 < globalLower2
-            )
+            const tempWarn = d.ADC1 > globalUpper1 || d.ADC1 < globalLower1
+            const speedWarn = d.ADC2 > globalUpper2 || d.ADC2 < globalLower2
+            return tempWarn || speedWarn
         }
 
         // ================= 保存全局阈值 =================
         function saveGlobalThreshold() {
-            const u1 = document.getElementById('u1').value
-            const l1 = document.getElementById('l1').value
-            const u2 = document.getElementById('u2').value
-            const l2 = document.getElementById('l2').value
+            const u1 = document.getElementById('u1').value.trim()
+            const l1 = document.getElementById('l1').value.trim()
+            const u2 = document.getElementById('u2').value.trim()
+            const l2 = document.getElementById('l2').value.trim()
 
             if (u1) globalUpper1 = Number(u1)
             if (l1) globalLower1 = Number(l1)
             if (u2) globalUpper2 = Number(u2)
             if (l2) globalLower2 = Number(l2)
 
+            // 清空输入框
             document.getElementById('u1').value = ''
             document.getElementById('l1').value = ''
             document.getElementById('u2').value = ''
             document.getElementById('l2').value = ''
 
             refreshThresholdUI()
-            alert('全局阈值已保存')
+            // 重新判断报警
+            deviceList.forEach((d, i) => {
+                deviceList[i].isWarn = checkWarn(d)
+            })
+            renderDeviceList()
+            checkWarnBanner()
+            alert('✅ 全局阈值已保存')
         }
 
         // ================= 刷新阈值显示 =================
@@ -476,10 +521,10 @@
             let html = ''
             deviceList.forEach((item, idx) => {
                 const warnClass = item.isWarn ? 'warn' : ''
-                const onlineText = item.online ? '在线' : '离线'
-                const onlineColor = item.online ? '#2ecc71' : '#999'
-                const warnText = item.isWarn ? '超限' : '正常'
-                const warnColor = item.isWarn ? '#e74c3c' : ''
+                const onlineText = item.online ? '✅ 在线' : '❌ 离线'
+                const onlineColor = item.online ? '#27ae60' : '#e74c3c'
+                const warnText = item.isWarn ? '⚠️ 超限' : '✅ 正常'
+                const warnColor = item.isWarn ? '#e74c3c' : '#27ae60'
 
                 html += `
                 <div class="table-row ${warnClass}">
@@ -508,7 +553,6 @@
         // ================= 手动刷新 =================
         function refreshAll() {
             fetchAllDevice()
-            alert('刷新中...')
         }
     </script>
 </body>
