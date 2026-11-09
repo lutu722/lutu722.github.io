@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>设备实时监控</title>
+    <title>托辊数据监测(网页版)</title>
     <style>
         * {
             margin: 0;
@@ -35,6 +35,61 @@
             font-weight: bold;
             text-align: center;
             margin-bottom: 16px;
+        }
+
+        .stat-card{
+            display:flex;
+            gap:16px;
+            margin-bottom:20px;
+        }
+        .stat-item{
+            flex:1;
+            background:#fff;
+            border-radius:12px;
+            text-align:center;
+            padding:16px 8px;
+        }
+        .stat-label{
+            font-size:14px;
+            color:#666;
+            margin-bottom:4px;
+        }
+        .stat-val{
+            font-size:22px;
+            font-weight:bold;
+        }
+        .online-text{color:#2ecc71;}
+        .offline-text{color:#888;}
+        .warn-text{color:#e74c3c;}
+
+        /*搜索框样式*/
+        .search-wrap{
+            position:relative;
+            background:#fff;
+            border-radius:12px;
+            padding:0 16px;
+            margin-bottom:20px;
+        }
+        .search-input{
+            width:100%;
+            height:48px;
+            border:none;
+            outline:none;
+            font-size:16px;
+        }
+        .search-clear{
+            position:absolute;
+            right:16px;
+            top:50%;
+            transform:translateY(-50%);
+            font-size:24px;
+            color:#999;
+            cursor:pointer;
+        }
+        .empty-tip{
+            text-align:center;
+            padding:40px 0;
+            color:#999;
         }
 
         .threshold-grid {
@@ -99,12 +154,11 @@
         .btn-save {
             background: #2ecc71;
         }
-
         .btn-refresh {
             background: #3498db;
         }
 
-        /* 表格样式修复 */
+        /* 表格样式 */
         .table-header {
             display: flex;
             background: #3498db;
@@ -192,14 +246,12 @@
             user-select: none;
         }
 
-        /* 按钮居中 */
         .btn-center {
             display: flex;
             justify-content: center;
             margin-top: 10px;
         }
 
-        /* 加载提示 */
         .loading-tip {
             text-align: center;
             padding: 10px;
@@ -212,8 +264,33 @@
 
 <body>
     <div class="container">
-        <!-- 加载提示 -->
         <div class="loading-tip" id="loadingTip">🔄 设备数据刷新中...</div>
+
+        <!-- 统计卡片【和APP保持一致：总/在线/离线/报警】 -->
+        <div class="stat-card">
+            <div class="stat-item">
+                <div class="stat-label">总设备</div>
+                <div class="stat-val">{{totalCount}}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">在线</div>
+                <div class="stat-val online-text">{{onlineCount}}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">离线</div>
+                <div class="stat-val offline-text">{{offlineCount}}</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-label">报警</div>
+                <div class="stat-val warn-text">{{warnCount}}</div>
+            </div>
+        </div>
+
+        <!--搜索框-->
+        <div class="search-wrap">
+            <input class="search-input" id="searchInput" placeholder="搜索：别名/设备名/在线/离线/报警" oninput="handleSearch()"/>
+            <span class="search-clear" id="searchClear" style="display:none;" onclick="clearSearch()">×</span>
+        </div>
 
         <!-- 全局阈值显示 -->
         <div class="card">
@@ -281,129 +358,207 @@
     </div>
 
     <script>
-        // ================= 全局阈值 =================
-        let globalUpper1 = 100
-        let globalLower1 = -50
-        let globalUpper2 = 10000000000
-        let globalLower2 = 0
+        // localStorage key常量
+        const STORAGE_KEY_ALIAS = "device_alias_map";
+        const STORAGE_KEY_THRESHOLD = "global_threshold";
 
-        // ================= 设备列表 =================
-        let deviceList = [
-                        { deviceName: "SP180", alias: "设备1", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP180&et=1871905045&method=md5&sign=xBjM%2BvnEaFMsDG2WG%2FGuzw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP289", alias: "设备2", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP289&et=1874377434&method=md5&sign=p%2BzXlvPusObeng12ma4GWg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP200", alias: "设备3", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP200&et=1871905580&method=md5&sign=Y4XwD8QOGtkE3BTDunzz1Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP252", alias: "设备4", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP252&et=1874377482&method=md5&sign=OM5dYLT%2FwR%2BC%2BrkvmUn8xA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP299", alias: "设备5", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP299&et=1874377531&method=md5&sign=lWo7vAGPlz%2FDCtojehCRew%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP275", alias: "设备6", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP275&et=1874377588&method=md5&sign=8Xo7ZYex7f9YIPoseGJkQw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP279", alias: "设备7", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP279&et=1874377622&method=md5&sign=B6PAfZzzauAEuXvk%2BoiO4w%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP237", alias: "设备8", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP237&et=1874377666&method=md5&sign=Jc1H5ufzXQlGV9kdLMLIRg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP225", alias: "设备9", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP225&et=1874377700&method=md5&sign=S24OmfiQ5cJ7F%2Fl1SL%2F7zg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP239", alias: "设备10", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP239&et=1874377756&method=md5&sign=NQvtnK%2BMRPM1pd9YiPLREw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP226", alias: "设备11", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP226&et=1874377791&method=md5&sign=J6XQDjjkLrXyBz2Uj61jKQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP221", alias: "设备12", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP221&et=1874377833&method=md5&sign=Xmp8Qt1ggBN7OlvuGF%2FKWA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP229", alias: "设备13", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP229&et=1874377880&method=md5&sign=Fmy89latb4VpBzwb0t1uPw%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP244", alias: "设备14", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP244&et=1874377922&method=md5&sign=KajxRCQdHHV6cj5VOYkF%2FA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP288", alias: "设备15", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP288&et=1874377957&method=md5&sign=scPNEThTdOnr6m754hYdag%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP290", alias: "设备16", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP290&et=1874377993&method=md5&sign=gDHzBO4G7PWLAN3WdMZM1g%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP222", alias: "设备17", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP222&et=1874378031&method=md5&sign=sjrvShpxwiCxidfpUS4a%2Fg%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP282", alias: "设备18", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP282&et=1874378066&method=md5&sign=sVsinZloMjAsXf5s4%2BIzYA%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },           
-                        {deviceName: "SP342", alias: "设备19", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP342&et=1876793400&method=md5&sign=AftRBo%2B39DluUEBq0HLj0A%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP302", alias: "设备20", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP302&et=1876957262&method=md5&sign=VzMjnlQvTldSy4D%2Fg9DSkQ%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP329", alias: "设备21", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP329&et=1876957307&method=md5&sign=gBR4R24gP%2FnUMXfypfDC3A%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        { deviceName: "SP311", alias: "设备22", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP311&et=1876957337&method=md5&sign=gMJIXbyeHfj8XDulv4rE9Q%3D%3D", ADC1: 0, ADC2: 0, ADC3: 0, ADC4: 0, ADC5: 0, isWarn: false, online: false },
-                        
-        ]
+        // 默认阈值
+        const DEFAULT_THRESHOLD = {
+            globalUpper1: 100,
+            globalLower1: -50,
+            globalUpper2: 10000000000,
+            globalLower2: 0
+        };
 
-        // ================= 配置 =================
-        const apiKey = "2TevJ1M7sUvvJWXvG+vz3e21/+cl8f+DBZdTG70zybs="
-        let isRefreshing = false
+        // 默认设备原始配置（token、productId固定，别名从localStorage读取）
+        const ORIGIN_DEVICE_LIST = [
+            { deviceName: "SP180", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP180&et=1871905045&method=md5&sign=xBjM%2BvnEaFMsDG2WG%2FGuzw%3D%3D" },
+            { deviceName: "SP289", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP289&et=1874377434&method=md5&sign=p%2BzXlvPusObeng12ma4GWg%3D%3D" },
+            { deviceName: "SP200", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP200&et=1871905580&method=md5&sign=Y4XwD8QOGtkE3BTDunzz1Q%3D%3D" },
+            { deviceName: "SP252", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP252&et=1874377482&method=md5&sign=OM5dYLT%2FwR%2BC%2BrkvmUn8xA%3D%3D" },
+            { deviceName: "SP299", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP299&et=1874377531&method=md5&sign=lWo7vAGPlz%2FDCtojehCRew%3D%3D" },
+            { deviceName: "SP275", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP275&et=1874377588&method=md5&sign=8Xo7ZYex7f9YIPoseGJkQw%3D%3D" },
+            { deviceName: "SP279", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP279&et=1874377622&method=md5&sign=B6PAfZzzauAEuXvk%2BoiO4w%3D%3D" },
+            { deviceName: "SP237", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP237&et=1874377666&method=md5&sign=Jc1H5ufzXQlGV9kdLMLIRg%3D%3D" },
+            { deviceName: "SP225", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP225&et=1874377700&method=md5&sign=S24OmfiQ5cJ7F%2Fl1SL%2F7zg%3D%3D" },
+            { deviceName: "SP239", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP239&et=1874377756&method=md5&sign=NQvtnK%2BMRPM1pd9YiPLREw%3D%3D" },
+            { deviceName: "SP226", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP226&et=1874377791&method=md5&sign=J6XQDjjkLrXyBz2Uj61jKQ%3D%3D" },
+            { deviceName: "SP221", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP221&et=1874377833&method=md5&sign=Xmp8Qt1ggBN7OlvuGF%2FKWA%3D%3D" },
+            { deviceName: "SP229", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP229&et=1874377880&method=md5&sign=Fmy89latb4VpBzwb0t1uPw%3D%3D" },
+            { deviceName: "SP244", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP244&et=1874377922&method=md5&sign=KajxRCQdHHV6cj5VOYkF%2FA%3D%3D" },
+            { deviceName: "SP288", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP288&et=1874377957&method=md5&sign=scPNEThTdOnr6m754hYdag%3D%3D" },
+            { deviceName: "SP290", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP290&et=1874377993&method=md5&sign=gDHzBO4G7PWLAN3WdMZM1g%3D%3D" },
+            { deviceName: "SP222", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP222&et=1874378031&method=md5&sign=sjrvShpxwiCxidfpUS4a%2Fg%3D%3D" },
+            { deviceName: "SP282", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP282&et=1874378066&method=md5&sign=sVsinZloMjAsXf5s4%2BIzYA%3D%3D" },
+            {deviceName: "SP342", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP342&et=1876793400&method=md5&sign=AftRBo%2B39DluUEBq0HLj0A%3D%3D" },
+            { deviceName: "SP302", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP302&et=1876957262&method=md5&sign=VzMjnlQvTldSy4D%2Fg9DSkQ%3D%3D" },
+            { deviceName: "SP329", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP329&et=1876957307&method=md5&sign=gBR4R24gP%2FnUMXfypfDC3A%3D%3D" },
+            { deviceName: "SP311", productId: "th0Bcjow5r", token: "version=2018-10-31&res=products%2Fth0Bcjow5r%2Fdevices%2FSP311&et=1876957337&method=md5&sign=gMJIXbyeHfj8XDulv4rE9Q%3D%3D" }
+        ];
 
-        // ================= 初始化 =================
+        // =========运行时变量=========
+        let globalUpper1,globalLower1,globalUpper2,globalLower2;
+        let deviceList = [];
+        let isRefreshing = false;
+        let round = 0;
+
+        // 读取别名映射
+        function loadAliasMap(){
+            try{
+                const str = localStorage.getItem(STORAGE_KEY_ALIAS);
+                if(!str) return {};
+                return JSON.parse(str);
+            }catch(e){
+                return {};
+            }
+        }
+        // 保存单个别名
+        function saveOneAlias(deviceName,alias){
+            const map = loadAliasMap();
+            map[deviceName] = alias;
+            localStorage.setItem(STORAGE_KEY_ALIAS,JSON.stringify(map));
+        }
+        // 加载阈值
+        function loadThreshold(){
+            try{
+                const str = localStorage.getItem(STORAGE_KEY_THRESHOLD);
+                if(!str) return {...DEFAULT_THRESHOLD};
+                const obj = JSON.parse(str);
+                return {...DEFAULT_THRESHOLD,...obj};
+            }catch(e){
+                return {...DEFAULT_THRESHOLD};
+            }
+        }
+        function saveThresholdToStorage(){
+            const obj = {globalUpper1,globalLower1,globalUpper2,globalLower2};
+            localStorage.setItem(STORAGE_KEY_THRESHOLD,JSON.stringify(obj));
+        }
+
+        // 初始化设备数组：合并原始配置 + localStorage别名，实时状态置默认
+        function initDeviceList(){
+            const aliasMap = loadAliasMap();
+            deviceList = ORIGIN_DEVICE_LIST.map((dev,idx)=>{
+                return {
+                    ...dev,
+                    alias: aliasMap[dev.deviceName] || ("设备"+(idx+1)),
+                    ADC1: null, ADC2: null, ADC3: null, ADC4: null, ADC5: null,
+                    isWarn: false, online: false, lastCheckRound:-1
+                }
+            })
+        }
+
         window.onload = function () {
+            //读取阈值
+            const th = loadThreshold();
+            globalUpper1 = th.globalUpper1;
+            globalLower1 = th.globalLower1;
+            globalUpper2 = th.globalUpper2;
+            globalLower2 = th.globalLower2;
+            initDeviceList();
+
             renderDeviceList()
             refreshThresholdUI()
             startAutoPoll()
         }
 
-        // ================= 自动刷新 =================
+        // 自动轮询，和APP对齐自适应间隔，最小3秒
         function startAutoPoll() {
             fetchAllDevice()
-            setInterval(fetchAllDevice, 5000)
+            const base = 3000;
+            const adaptive = Math.max(base, deviceList.length * 120);
+            setInterval(fetchAllDevice, adaptive);
         }
 
-        // 显示/隐藏加载
         function setLoading(show) {
             document.getElementById('loadingTip').style.display = show ? 'block' : 'none'
         }
 
-        // ================= 获取所有设备 =================
         async function fetchAllDevice() {
             if (isRefreshing) return
             isRefreshing = true
             setLoading(true)
-            
+            round++
             for (let i = 0; i < deviceList.length; i++) {
-                await getOneDeviceData(deviceList[i], i)
+                const dev = deviceList[i];
+                // 和APP逻辑：离线设备5轮才校验一次，减少请求
+                if(!dev.online && dev.lastCheckRound >=0 && (round - dev.lastCheckRound) <5){
+                    continue;
+                }
+                await getOneDeviceData(dev, i);
             }
-            
             isRefreshing = false
             setLoading(false)
             renderDeviceList()
             checkWarnBanner()
         }
 
-        // ================= 获取单个设备 =================
+        // 【修复BUG】请求头大写 Authorization，串行两个请求，和APP逻辑完全一样
         function getOneDeviceData(dev, idx) {
-            return new Promise(resolve => {
-                // ================ 这里已经改成你原来 uniapp 一模一样的在线状态判断逻辑 ================
-                fetch("https://iot-api.heclouds.com/device/detail?product_id=" + dev.productId + "&device_name=" + dev.deviceName, {
-                    method: "GET",
-                    headers: {
-                        "Authorization": dev.token
-                    }
-                }).then(res => res.json()).then(res => {
-                    try {
-                        if (res && res.code === 0 && res.data) {
-                            deviceList[idx].online = (res.data.status === 1);
-                        } else {
-                            deviceList[idx].online = false;
+            return new Promise(async resolve => {
+                let online = false;
+                const prevOnline = dev.online;
+                // 1.设备详情，判断在线状态
+                try{
+                    const detailRes = await fetch(`https://iot-api.heclouds.com/device/detail?product_id=${dev.productId}&device_name=${dev.deviceName}`,{
+                        method:"GET",
+                        headers:{
+                            "Authorization": dev.token
                         }
-                    } catch (e) {
-                        deviceList[idx].online = false;
+                    });
+                    const detailJson = await detailRes.json();
+                    if(detailJson.code ===0 && detailJson.data){
+                        online = detailJson.data.status === 1;
                     }
-                }).catch(() => {
-                    deviceList[idx].online = false;
-                })
+                }catch(e){
+                    online = false;
+                }
 
-                // 数据获取（不变）
-                fetch(`https://iot-api.heclouds.com/thingmodel/query-device-property?product_id=${dev.productId}&device_name=${dev.deviceName}`, {
-                    headers: { "authorization": dev.token }
-                }).then(res => res.json()).then(res => {
-                    if (res.data) {
-                        const f = (key) => {
-                            const t = res.data.find(x => x.identifier === key)
-                            return t ? Number(t.value) || 0 : 0
+                let ADC1=null,ADC2=null,ADC3=null,ADC4=null,ADC5=null;
+                // 在线才拉取物模型
+                if(online){
+                    try{
+                        const propRes = await fetch(`https://iot-api.heclouds.com/thingmodel/query-device-property?product_id=${dev.productId}&device_name=${dev.deviceName}`,{
+                            method:"GET",
+                            headers:{
+                                "Authorization": dev.token
+                            }
+                        });
+                        const propJson = await propRes.json();
+                        if(propJson.code ===0 && Array.isArray(propJson.data)){
+                            propJson.data.forEach(it=>{
+                                if(it.identifier === "ADC1") ADC1 = it.value!==null ? Number(it.value):null;
+                                if(it.identifier === "ADC2") ADC2 = it.value!==null ? Number(it.value):null;
+                                if(it.identifier === "ADC3") ADC3 = it.value!==null ? Number(it.value):null;
+                                if(it.identifier === "ADC4") ADC4 = it.value!==null ? Number(it.value):null;
+                                if(it.identifier === "ADC5") ADC5 = it.value!==null ? Number(it.value):null;
+                            })
                         }
-                        deviceList[idx].ADC1 = f("ADC1")
-                        deviceList[idx].ADC2 = f("ADC2")
-                        deviceList[idx].ADC3 = f("ADC3")
-                        deviceList[idx].ADC4 = f("ADC4")
-                        deviceList[idx].ADC5 = f("ADC5")
-                        deviceList[idx].isWarn = checkWarn(deviceList[idx])
-                    }
-                    resolve()
-                }).catch(() => resolve())
+                    }catch(e){}
+                }
+
+                //回写数据
+                const item = deviceList[idx];
+                item.online = online;
+                item.lastCheckRound = round;
+                item.ADC1 = ADC1;
+                item.ADC2 = ADC2;
+                item.ADC3 = ADC3;
+                item.ADC4 = ADC4;
+                item.ADC5 = ADC5;
+                item.isWarn = checkWarn(item);
+
+                resolve();
             })
         }
 
-        // ================= 报警判断 =================
+        // 报警判断逻辑 和APP保持一致
         function checkWarn(d) {
+            if(!d.online || d.ADC1===null || d.ADC2===null) return false;
             const tempWarn = d.ADC1 > globalUpper1 || d.ADC1 < globalLower1
             const speedWarn = d.ADC2 > globalUpper2 || d.ADC2 < globalLower2
             return tempWarn || speedWarn
         }
 
-        // ================= 保存全局阈值 =================
         function saveGlobalThreshold() {
             const u1 = document.getElementById('u1').value.trim()
             const l1 = document.getElementById('l1').value.trim()
@@ -415,23 +570,22 @@
             if (u2) globalUpper2 = Number(u2)
             if (l2) globalLower2 = Number(l2)
 
-            // 清空输入框
+            saveThresholdToStorage();
+
             document.getElementById('u1').value = ''
             document.getElementById('l1').value = ''
             document.getElementById('u2').value = ''
             document.getElementById('l2').value = ''
 
             refreshThresholdUI()
-            // 重新判断报警
             deviceList.forEach((d, i) => {
                 deviceList[i].isWarn = checkWarn(d)
             })
             renderDeviceList()
             checkWarnBanner()
-            alert('✅ 全局阈值已保存')
+            alert('✅ 全局阈值已保存（浏览器本地已持久化）')
         }
 
-        // ================= 刷新阈值显示 =================
         function refreshThresholdUI() {
             document.getElementById('globalUpper1').innerText = globalUpper1
             document.getElementById('globalLower1').innerText = globalLower1
@@ -439,47 +593,99 @@
             document.getElementById('globalLower2').innerText = globalLower2
         }
 
-        // 更新设备别名
+        // 修改别名，立刻保存到localStorage
         function updateAlias(index, value) {
             deviceList[index].alias = value
+            saveOneAlias(deviceList[index].deviceName, value);
         }
 
-        // ================= 渲染设备列表 =================
+        // =========搜索逻辑 和APP对齐========
+        function getFilteredList(){
+            const kwRaw = document.getElementById("searchInput").value;
+            const kw = kwRaw.trim().toLowerCase();
+            if(!kw){
+                return deviceList;
+            }
+            if(kw === "在线"){
+                return deviceList.filter(d=>d.online===true);
+            }
+            if(kw === "离线"){
+                return deviceList.filter(d=>d.online===false);
+            }
+            if(kw === "报警" || kw === "超限"){
+                return deviceList.filter(d=>d.isWarn===true);
+            }
+            return deviceList.filter(item=>{
+                const alias = (item.alias||"").toLowerCase();
+                const devName = (item.deviceName||"").toLowerCase();
+                return alias.includes(kw) || devName.includes(kw);
+            })
+        }
+
+        function handleSearch(){
+            const val = document.getElementById("searchInput").value;
+            document.getElementById("searchClear").style.display = val.length>0 ? "block":"none";
+            renderDeviceList();
+        }
+        function clearSearch(){
+            document.getElementById("searchInput").value = "";
+            document.getElementById("searchClear").style.display = "none";
+            renderDeviceList();
+        }
+
+        // 渲染列表 + 统计数字
         function renderDeviceList() {
             const body = document.getElementById('deviceListBody')
-            let html = ''
-            deviceList.forEach((item, idx) => {
-                const warnClass = item.isWarn ? 'warn' : ''
-                const onlineText = item.online ? '✅ 在线' : '❌ 离线'
-                const onlineColor = item.online ? '#27ae60' : '#e74c3c'
-                const warnText = item.isWarn ? '⚠️ 超限' : '✅ 正常'
-                const warnColor = item.isWarn ? '#e74c3c' : '#27ae60'
+            const filtered = getFilteredList();
 
-                html += `
-                <div class="table-row ${warnClass}">
-                    <div class="cell dev-name">
-                        <input class="alias-input" value="${item.alias}" oninput="updateAlias(${idx}, this.value)" />
-                        <span class="platform-name">(${item.deviceName})</span>
-                    </div>
-                    <div class="cell">${item.ADC1}</div>
-                    <div class="cell">${item.ADC2}</div>
-                    <div class="cell">${item.ADC3}</div>
-                    <div class="cell">${item.ADC4}</div>
-                    <div class="cell">${item.ADC5}</div>
-                    <div class="cell status" style="color:${onlineColor}">${onlineText}</div>
-                    <div class="cell status" style="color:${warnColor}">${warnText}</div>
-                </div>`
-            })
+            //计算统计【统计永远全部设备，不受搜索过滤】
+            const totalCount = deviceList.length;
+            const onlineCount = deviceList.filter(d=>d.online).length;
+            const offlineCount = deviceList.filter(d=>!d.online).length;
+            const warnCount = deviceList.filter(d=>d.isWarn).length;
+
+            document.querySelector(".stat-card .stat-item:nth-child(1) .stat-val").innerText = totalCount;
+            document.querySelector(".stat-card .stat-item:nth-child(2) .stat-val").innerText = onlineCount;
+            document.querySelector(".stat-card .stat-item:nth-child(3) .stat-val").innerText = offlineCount;
+            document.querySelector(".stat-card .stat-item:nth-child(4) .stat-val").innerText = warnCount;
+
+            let html = '';
+            if(filtered.length ===0){
+                html += `<div class="empty-tip">未匹配到设备</div>`
+            }else{
+                filtered.forEach((item) => {
+                    const warnClass = item.isWarn ? 'warn' : ''
+                    const onlineText = item.online ? '✅ 在线' : '❌ 离线'
+                    const onlineColor = item.online ? '#27ae60' : '#e74c3c'
+                    const warnText = item.isWarn ? '⚠️ 超限' : '✅ 正常'
+                    const warnColor = item.isWarn ? '#e74c3c' : '#27ae60'
+                    const f = (v)=> v===null?"—":v;
+                    const realIdx = deviceList.findIndex(d=>d.deviceName === item.deviceName);
+
+                    html += `
+                    <div class="table-row ${warnClass}">
+                        <div class="cell dev-name">
+                            <input class="alias-input" value="${item.alias}" oninput="updateAlias(${realIdx}, this.value)" />
+                            <span class="platform-name">(${item.deviceName})</span>
+                        </div>
+                        <div class="cell">${f(item.ADC1)}</div>
+                        <div class="cell">${f(item.ADC2)}</div>
+                        <div class="cell">${f(item.ADC3)}</div>
+                        <div class="cell">${f(item.ADC4)}</div>
+                        <div class="cell">${f(item.ADC5)}</div>
+                        <div class="cell status" style="color:${onlineColor}">${onlineText}</div>
+                        <div class="cell status" style="color:${warnColor}">${warnText}</div>
+                    </div>`
+                })
+            }
             body.innerHTML = html
         }
 
-        // ================= 报警条 =================
         function checkWarnBanner() {
             const hasWarn = deviceList.some(d => d.isWarn)
             document.getElementById('warnBanner').style.display = hasWarn ? 'block' : 'none'
         }
 
-        // ================= 手动刷新 =================
         function refreshAll() {
             fetchAllDevice()
         }
